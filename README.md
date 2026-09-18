@@ -1,4 +1,8 @@
-# Apollo
+# Apollo Managed
+
+This fork adds host enforcement for [Moonlight V+ managed access](https://github.com/mikulicf/moonlight-vplus/tree/master/control). The management backend authenticates users and assigns machines; streams connect directly to this host. No backend URL, hostname, account, or enrollment secret is built in.
+
+See [managed host setup and security](docs/managed-access.md) before enabling managed mode. The upstream Apollo description and documentation follow below.
 
 Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android). Offering low latency, native client resolution, cloud gaming server capabilities with support for AMD, Intel, and Nvidia GPUs for hardware encoding. Software encoding is also available. A web UI is provided to allow configuration and client pairing from your favorite web browser. Pair from the local server or any mobile device.
 
