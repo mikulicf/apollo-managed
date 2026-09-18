@@ -5,17 +5,21 @@
 // lib includes
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
+#include <mutex>
 
 // local includes
 #include "crypto.h"
 
 namespace crypto {
+  // Client authentication also runs concurrently with administrative pairing updates.
+  static std::mutex certificate_mutex;
   using asn1_string_t = util::safe_ptr<ASN1_STRING, ASN1_STRING_free>;
 
   cert_chain_t::cert_chain_t():
       _certs {}, _cert_ctx { X509_STORE_CTX_new() } {
   }
   void cert_chain_t::add(p_named_cert_t& named_cert_p) {
+    std::lock_guard lock(certificate_mutex);
     x509_store_t x509_store { X509_STORE_new() };
 
     X509_STORE_add_cert(x509_store.get(), x509(named_cert_p->cert).get());
@@ -23,6 +27,7 @@ namespace crypto {
   }
 
   void cert_chain_t::clear() {
+    std::lock_guard lock(certificate_mutex);
     _certs.clear();
   }
 
@@ -53,8 +58,14 @@ namespace crypto {
    * @return nullptr if the certificate is valid, otherwise an error string.
    */
   const char * cert_chain_t::verify(x509_t::element_type *cert, p_named_cert_t& named_cert_out) {
+    std::lock_guard lock(certificate_mutex);
     int err_code = 0;
     for (auto &[named_cert_p, x509_store] : _certs) {
+      auto paired_certificate = x509(named_cert_p->cert);
+      if (!paired_certificate || X509_cmp(cert, paired_certificate.get()) != 0) {
+        // Pairing authorizes this exact leaf, never other certificates it signs.
+        continue;
+      }
       auto fg = util::fail_guard([this]() {
         X509_STORE_CTX_cleanup(_cert_ctx.get());
       });

@@ -1557,7 +1557,9 @@ namespace confighttp {
     server.resource["^/images/logo-apollo-45.png$"]["GET"] = getApolloLogoImage;
     server.resource["^/assets\\/.+$"]["GET"] = getNodeModules;
     server.config.reuse_address = true;
-    server.config.address = net::af_to_any_address_string(address_family);
+    // Bind locally even before an administrator is created. Route-level login
+    // checks alone do not cover first-run credential setup.
+    server.config.address = config::managed_policy_file.empty() ? net::af_to_any_address_string(address_family) : "127.0.0.1";
     server.config.port = port_https;
 
     auto accept_and_run = [&](auto *server) {

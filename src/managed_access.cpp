@@ -3,6 +3,7 @@
  * @brief Host-side enforcement of short-lived management policy.
  */
 #include "managed_access.h"
+
 #include "config.h"
 
 #include <algorithm>
@@ -12,14 +13,17 @@
 #include <mutex>
 #include <openssl/pem.h>
 #include <sstream>
+#include <stdexcept>
 
 namespace managed_access {
   namespace {
     using clock = std::chrono::steady_clock;
+
     struct entry_t {
       crypto::p_named_cert_t client;
       clock::time_point deadline;
     };
+
     std::mutex mutex;
     std::map<std::string, entry_t> entries;
     std::string previous_document;
@@ -99,9 +103,7 @@ namespace managed_access {
           client->name = lease.at("username").get<std::string>();
           client->uuid = client_uuid(hash);
           client->cert = pem;
-          client->perm = static_cast<crypto::PERM>(static_cast<uint32_t>(crypto::PERM::_all_inputs) |
-            static_cast<uint32_t>(crypto::PERM::_all_actions) | static_cast<uint32_t>(crypto::PERM::clipboard_read) |
-            static_cast<uint32_t>(crypto::PERM::clipboard_set));
+          client->perm = static_cast<crypto::PERM>(static_cast<uint32_t>(crypto::PERM::_all_inputs) | static_cast<uint32_t>(crypto::PERM::_all_actions) | static_cast<uint32_t>(crypto::PERM::clipboard_read) | static_cast<uint32_t>(crypto::PERM::clipboard_set));
           client->enable_legacy_ordering = false;
           client->allow_client_commands = false;
           client->always_use_virtual_display = false;
