@@ -35,6 +35,8 @@ An empty `managed_policy_file` retains regular Apollo operation. Removing manage
 
 ## Validation and upstream maintenance
 
+Keep `third-party/build-deps` at the restored FFmpeg 8 revision `c38829d6` or a reviewed compatible successor. Apollo's encoder teardown drains FFmpeg before releasing the device; the earlier `a9a7f863` dependency pin supplies FFmpeg 7 and can hang indefinitely during AMD AMF probing. This fork restores the dependency revision used before the upstream merge regression described in [Apollo issue #1588](https://github.com/ClassicOldSong/Apollo/issues/1588). Validate hardware encoder startup and stream teardown when updating these dependencies.
+
 CI builds the Windows host and runs production policy-parser tests covering exact certificate matching, derived and unknown certificates, revoked/expired grants, malformed policy, validity bounds, and permission restrictions.
 
 This fork builds on Apollo master and includes fixes from the upstream security work: strict paired-certificate identity checks and serialized legacy certificate-store access, plus the [input bounds repair](https://github.com/LizardByte/Sunshine/commit/1583e7c4) and [control packet bounds repair](https://github.com/LizardByte/Sunshine/commit/82bccdf6). Review [Sunshine security advisories](https://github.com/LizardByte/Sunshine/security/advisories) when updating inherited protocol code. Automated tests and a successful build do not establish suitability for every public-network deployment.
