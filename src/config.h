@@ -296,6 +296,8 @@ namespace config {
   extern nvhttp_t nvhttp;
   extern input_t input;
   extern sunshine_t sunshine;
+  // A private, atomically replaced policy file supplied by the management agent.
+  extern std::string managed_policy_file;
 
   int parse(int argc, char *argv[]);
   std::unordered_map<std::string, std::string> parse_config(const std::string_view &file_content);

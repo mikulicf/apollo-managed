@@ -578,6 +578,8 @@ namespace config {
     true, // forward_rumble
   };
 
+  std::string managed_policy_file;
+
   sunshine_t sunshine {
     false, // hide_tray_controls
     true, // enable_pairing
@@ -1315,6 +1317,8 @@ namespace config {
       config::sunshine.flags[config::flag::UPNP].flip();
     }
 
+    string_f(vars, "managed_policy_file", managed_policy_file);
+
     string_restricted_f(vars, "locale", config::sunshine.locale, {
                                                                    "bg"sv,  // Bulgarian
                                                                    "cs"sv,  // Czech
@@ -1372,6 +1376,16 @@ namespace config {
       apply_flags(it->second.c_str());
 
       vars.erase(it);
+    }
+
+    if (!managed_policy_file.empty()) {
+      // Apply invariants last: flags and legacy options cannot weaken managed access.
+      sunshine.enable_pairing = false;
+      sunshine.enable_discovery = false;
+      sunshine.flags[config::flag::UPNP] = false;
+      nvhttp.origin_web_ui_allowed = "pc";
+      stream.lan_encryption_mode = ENCRYPTION_MODE_MANDATORY;
+      stream.wan_encryption_mode = ENCRYPTION_MODE_MANDATORY;
     }
 
     if (sunshine.min_log_level <= 3) {

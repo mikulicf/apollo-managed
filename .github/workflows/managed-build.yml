@@ -1,0 +1,63 @@
+name: Managed host build
+on:
+  push:
+    branches: [master, codex/managed-access]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-cppwinrt
+            mingw-w64-ucrt-x86_64-curl-winssl
+            mingw-w64-ucrt-x86_64-MinHook
+            mingw-w64-ucrt-x86_64-miniupnpc
+            mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-onevpl
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-opus
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-nlohmann_json
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Configure
+        shell: msys2 {0}
+        run: cmake -B build -G Ninja -S . -DBUILD_TESTS=OFF -DBUILD_DOCS=OFF -DSUNSHINE_PUBLISHER_NAME=mikulicf -DSUNSHINE_PUBLISHER_WEBSITE=https://github.com/mikulicf/apollo-managed -DSUNSHINE_PUBLISHER_ISSUE_URL=https://github.com/mikulicf/apollo-managed/issues
+      - name: Build
+        shell: msys2 {0}
+        run: cmake --build build --parallel 3
+      - name: Package
+        shell: msys2 {0}
+        run: cpack -G ZIP --config build/CPackConfig.cmake
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Apollo-Managed-Windows-x64
+          path: 'build/cpack_artifacts/*.zip'
+          if-no-files-found: error
+  policy-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y g++-14 cmake ninja-build libssl-dev nlohmann-json3-dev libboost-dev
+      - run: cmake -S tests/managed_access -B build-policy -G Ninja -DCMAKE_CXX_COMPILER=g++-14 && cmake --build build-policy && ctest --test-dir build-policy --output-on-failure

@@ -27,6 +27,7 @@
 #include "globals.h"
 #include "httpcommon.h"
 #include "logging.h"
+#include "managed_access.h"
 #include "network.h"
 #include "nvhttp.h"
 #include "platform/common.h"
@@ -881,6 +882,13 @@ namespace nvhttp {
 
   template<class T>
   void serverinfo(std::shared_ptr<typename SimpleWeb::ServerBase<T>::Response> response, std::shared_ptr<typename SimpleWeb::ServerBase<T>::Request> request) {
+    if constexpr (std::is_same_v<SimpleWeb::HTTP, T>) {
+      if (managed_access::enabled() && !request->remote_endpoint().address().is_loopback()) {
+        response->write(SimpleWeb::StatusCode::client_error_forbidden);
+        response->close_connection_after_response = true;
+        return;
+      }
+    }
     print_req<T>(request);
 
     int pair_status = 0;
@@ -903,6 +911,7 @@ namespace nvhttp {
     tree.put("root.appversion", VERSION);
     tree.put("root.GfeVersion", GFE_VERSION);
     tree.put("root.uniqueid", http::unique_id);
+    tree.put("root.ManagedAccessProtocol", managed_access::enabled() ? 1 : 0);
     tree.put("root.HttpsPort", net::map_port(PORT_HTTPS));
     tree.put("root.ExternalPort", net::map_port(PORT_HTTP));
     tree.put("root.MaxLumaPixelsHEVC", video::active_hevc_mode > 1 ? "1869449984" : "0");
@@ -1671,6 +1680,12 @@ namespace nvhttp {
         return false;
       }
 
+      if (managed_access::enabled()) {
+        auto client = managed_access::authorize(x509.get());
+        req->userp = client;
+        return client != nullptr;
+      }
+
       bool verified = false;
       p_named_cert_t named_cert_p;
 
@@ -1728,6 +1743,30 @@ namespace nvhttp {
     https_server.resource["^/cancel$"]["GET"] = cancel;
     https_server.resource["^/actions/clipboard$"]["GET"] = getClipboard;
     https_server.resource["^/actions/clipboard$"]["POST"] = setClipboard;
+
+    // TLS authentication alone is insufficient: keep-alive connections must
+    // lose authorization as soon as the agent removes a lease or it expires.
+    if (managed_access::enabled()) {
+      for (auto &[path, methods] : https_server.resource) {
+        for (auto &[method, handler] : methods) {
+          auto original = handler;
+          handler = [original](auto response, auto request) {
+            auto client = get_verified_cert(request);
+            if (!client || !managed_access::allowed(client->uuid)) {
+              response->write(SimpleWeb::StatusCode::client_error_unauthorized);
+              response->close_connection_after_response = true;
+              return;
+            }
+            original(response, request);
+          };
+        }
+      }
+    }
+
+    https_server.config.max_request_streambuf_size = 32 * 1024;
+    https_server.config.timeout_request = 10;
+    http_server.config.max_request_streambuf_size = 8 * 1024;
+    http_server.config.timeout_request = 5;
 
     https_server.config.reuse_address = true;
     https_server.config.address = net::af_to_any_address_string(address_family);
