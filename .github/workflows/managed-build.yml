@@ -51,7 +51,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Apollo-Managed-Windows-x64
-          path: '*.zip'
+          path: 'build/cpack_artifacts/*.zip'
           if-no-files-found: error
   policy-tests:
     runs-on: ubuntu-24.04
