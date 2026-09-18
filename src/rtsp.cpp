@@ -23,6 +23,7 @@ extern "C" {
 
 // local includes
 #include "config.h"
+#include "managed_access.h"
 #include "globals.h"
 #include "input.h"
 #include "logging.h"
@@ -434,6 +435,11 @@ namespace rtsp_stream {
     }
 
     void handle_msg(tcp::socket &sock, launch_session_t &session, msg_t &&req) {
+      if (!managed_access::allowed(session.unique_id)) {
+        boost::system::error_code ec;
+        sock.close(ec);
+        return;
+      }
       auto func = _map_cmd_cb.find(req->message.request.command);
       if (func != std::end(_map_cmd_cb)) {
         func->second(this, sock, session, std::move(req));
@@ -457,7 +463,7 @@ namespace rtsp_stream {
       auto socket = std::move(next_socket);
 
       auto launch_session {launch_event.view(0s)};
-      if (launch_session) {
+      if (launch_session && managed_access::allowed(launch_session->unique_id)) {
         // Associate the current RTSP session with this socket and start reading
         socket->session = launch_session;
         socket->read();
@@ -490,6 +496,9 @@ namespace rtsp_stream {
      * @param launch_session Streaming session information.
      */
     void session_raise(std::shared_ptr<launch_session_t> launch_session) {
+      if (!managed_access::allowed(launch_session->unique_id)) {
+        return;
+      }
       // If a launch event is still pending, don't overwrite it.
       if (launch_event.view(0s)) {
         return;
@@ -585,6 +594,20 @@ namespace rtsp_stream {
      * @brief Runs an iteration of the RTSP server loop
      */
     void iterate() {
+      if (managed_access::enabled()) {
+        managed_access::refresh();
+        auto pending = launch_event.view(0s);
+        if (pending && !managed_access::allowed(pending->unique_id)) {
+          session_clear(pending->id);
+        }
+        // Revoke every session for the identity, including concurrent streams.
+        auto slots_lock = _session_slots.lock();
+        for (const auto &slot : *_session_slots) {
+          if (slot && !managed_access::allowed(stream::session::uuid(*slot))) {
+            stream::session::graceful_stop(*slot);
+          }
+        }
+      }
       // If we have a session, we will return to the server loop every
       // 500ms to allow session cleanup to happen.
       if (session_count() > 0) {
@@ -1156,6 +1179,10 @@ namespace rtsp_stream {
       return;
     }
 
+    if (!managed_access::allowed(session.unique_id)) {
+      respond(sock, session, &option, 403, "Forbidden", req->sequenceNumber, {});
+      return;
+    }
     auto stream_session = stream::session::alloc(config, session);
     server->insert(stream_session);
 
